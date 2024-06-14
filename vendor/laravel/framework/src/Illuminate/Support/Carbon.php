@@ -2,58 +2,35 @@
 
 namespace Illuminate\Support;
 
-use JsonSerializable;
 use Carbon\Carbon as BaseCarbon;
-use Illuminate\Support\Traits\Macroable;
+use Carbon\CarbonImmutable as BaseCarbonImmutable;
+use Illuminate\Support\Traits\Conditionable;
+use Illuminate\Support\Traits\Dumpable;
+use Ramsey\Uuid\Uuid;
+use Symfony\Component\Uid\Ulid;
 
-class Carbon extends BaseCarbon implements JsonSerializable
+class Carbon extends BaseCarbon
 {
-    use Macroable;
+    use Conditionable, Dumpable;
 
     /**
-     * The custom Carbon JSON serializer.
-     *
-     * @var callable|null
+     * {@inheritdoc}
      */
-    protected static $serializer;
-
-    /**
-     * Prepare the object for JSON serialization.
-     *
-     * @return array|string
-     */
-    public function jsonSerialize()
+    public static function setTestNow(mixed $testNow = null): void
     {
-        if (static::$serializer) {
-            return call_user_func(static::$serializer, $this);
+        BaseCarbon::setTestNow($testNow);
+        BaseCarbonImmutable::setTestNow($testNow);
+    }
+
+    /**
+     * Create a Carbon instance from a given ordered UUID or ULID.
+     */
+    public static function createFromId(Uuid|Ulid|string $id): static
+    {
+        if (is_string($id)) {
+            $id = Ulid::isValid($id) ? Ulid::fromString($id) : Uuid::fromString($id);
         }
 
-        $carbon = $this;
-
-        return call_user_func(function () use ($carbon) {
-            return get_object_vars($carbon);
-        });
-    }
-
-    /**
-     * JSON serialize all Carbon instances using the given callback.
-     *
-     * @param  callable  $callback
-     * @return void
-     */
-    public static function serializeUsing($callback)
-    {
-        static::$serializer = $callback;
-    }
-
-    /**
-     * Create a new Carbon instance based on the given state array.
-     *
-     * @param  array  $array
-     * @return static
-     */
-    public static function __set_state($array)
-    {
-        return static::instance(parent::__set_state($array));
+        return static::createFromInterface($id->getDateTime());
     }
 }

@@ -1,51 +1,82 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace PhpParser\Node\Stmt;
 
+use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\ComplexType;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
+use PhpParser\Node\PropertyItem;
 
-class Property extends Node\Stmt
-{
+class Property extends Node\Stmt {
     /** @var int Modifiers */
-    public $flags;
-    /** @var PropertyProperty[] Properties */
-    public $props;
-
-    /** @deprecated Use $flags instead */
-    public $type;
+    public int $flags;
+    /** @var PropertyItem[] Properties */
+    public array $props;
+    /** @var null|Identifier|Name|ComplexType Type declaration */
+    public ?Node $type;
+    /** @var Node\AttributeGroup[] PHP attribute groups */
+    public array $attrGroups;
 
     /**
      * Constructs a class property list node.
      *
-     * @param int                $flags      Modifiers
-     * @param PropertyProperty[] $props      Properties
-     * @param array              $attributes Additional attributes
+     * @param int $flags Modifiers
+     * @param PropertyItem[] $props Properties
+     * @param array<string, mixed> $attributes Additional attributes
+     * @param null|Identifier|Name|ComplexType $type Type declaration
+     * @param Node\AttributeGroup[] $attrGroups PHP attribute groups
      */
-    public function __construct($flags, array $props, array $attributes = array()) {
-        parent::__construct($attributes);
+    public function __construct(int $flags, array $props, array $attributes = [], ?Node $type = null, array $attrGroups = []) {
+        $this->attributes = $attributes;
         $this->flags = $flags;
-        $this->type = $flags;
         $this->props = $props;
+        $this->type = $type;
+        $this->attrGroups = $attrGroups;
     }
 
-    public function getSubNodeNames() {
-        return array('flags', 'props');
+    public function getSubNodeNames(): array {
+        return ['attrGroups', 'flags', 'type', 'props'];
     }
 
-    public function isPublic() {
-        return ($this->flags & Class_::MODIFIER_PUBLIC) !== 0
-            || ($this->flags & Class_::VISIBILITY_MODIFIER_MASK) === 0;
+    /**
+     * Whether the property is explicitly or implicitly public.
+     */
+    public function isPublic(): bool {
+        return ($this->flags & Modifiers::PUBLIC) !== 0
+            || ($this->flags & Modifiers::VISIBILITY_MASK) === 0;
     }
 
-    public function isProtected() {
-        return (bool) ($this->flags & Class_::MODIFIER_PROTECTED);
+    /**
+     * Whether the property is protected.
+     */
+    public function isProtected(): bool {
+        return (bool) ($this->flags & Modifiers::PROTECTED);
     }
 
-    public function isPrivate() {
-        return (bool) ($this->flags & Class_::MODIFIER_PRIVATE);
+    /**
+     * Whether the property is private.
+     */
+    public function isPrivate(): bool {
+        return (bool) ($this->flags & Modifiers::PRIVATE);
     }
 
-    public function isStatic() {
-        return (bool) ($this->flags & Class_::MODIFIER_STATIC);
+    /**
+     * Whether the property is static.
+     */
+    public function isStatic(): bool {
+        return (bool) ($this->flags & Modifiers::STATIC);
+    }
+
+    /**
+     * Whether the property is readonly.
+     */
+    public function isReadonly(): bool {
+        return (bool) ($this->flags & Modifiers::READONLY);
+    }
+
+    public function getType(): string {
+        return 'Stmt_Property';
     }
 }

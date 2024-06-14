@@ -2,11 +2,18 @@
 
 namespace Illuminate\Foundation\Console;
 
+use Illuminate\Console\Concerns\CreatesMatchingTest;
 use Illuminate\Console\GeneratorCommand;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Str;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputOption;
 
+#[AsCommand(name: 'make:mail')]
 class MailMakeCommand extends GeneratorCommand
 {
+    use CreatesMatchingTest;
+
     /**
      * The console command name.
      *
@@ -26,7 +33,7 @@ class MailMakeCommand extends GeneratorCommand
      *
      * @var string
      */
-    protected $type = 'Mail';
+    protected $type = 'Mailable';
 
     /**
      * Execute the console command.
@@ -39,8 +46,12 @@ class MailMakeCommand extends GeneratorCommand
             return;
         }
 
-        if ($this->option('markdown')) {
+        if ($this->option('markdown') !== false) {
             $this->writeMarkdownTemplate();
+        }
+
+        if ($this->option('view') !== false) {
+            $this->writeView();
         }
     }
 
@@ -51,13 +62,35 @@ class MailMakeCommand extends GeneratorCommand
      */
     protected function writeMarkdownTemplate()
     {
-        $path = resource_path('views/'.str_replace('.', '/', $this->option('markdown'))).'.blade.php';
+        $path = $this->viewPath(
+            str_replace('.', '/', $this->getView()).'.blade.php'
+        );
 
-        if (! $this->files->isDirectory(dirname($path))) {
-            $this->files->makeDirectory(dirname($path), 0755, true);
-        }
+        $this->files->ensureDirectoryExists(dirname($path));
 
         $this->files->put($path, file_get_contents(__DIR__.'/stubs/markdown.stub'));
+    }
+
+    /**
+     * Write the Blade template for the mailable.
+     *
+     * @return void
+     */
+    protected function writeView()
+    {
+        $path = $this->viewPath(
+            str_replace('.', '/', $this->getView()).'.blade.php'
+        );
+
+        $this->files->ensureDirectoryExists(dirname($path));
+
+        $stub = str_replace(
+            '{{ quote }}',
+            Inspiring::quotes()->random(),
+            file_get_contents(__DIR__.'/stubs/view.stub')
+        );
+
+        $this->files->put($path, $stub);
     }
 
     /**
@@ -68,13 +101,37 @@ class MailMakeCommand extends GeneratorCommand
      */
     protected function buildClass($name)
     {
-        $class = parent::buildClass($name);
+        $class = str_replace(
+            '{{ subject }}',
+            Str::headline(str_replace($this->getNamespace($name).'\\', '', $name)),
+            parent::buildClass($name)
+        );
 
-        if ($this->option('markdown')) {
-            $class = str_replace('DummyView', $this->option('markdown'), $class);
+        if ($this->option('markdown') !== false || $this->option('view') !== false) {
+            $class = str_replace(['DummyView', '{{ view }}'], $this->getView(), $class);
         }
 
         return $class;
+    }
+
+    /**
+     * Get the view name.
+     *
+     * @return string
+     */
+    protected function getView()
+    {
+        $view = $this->option('markdown') ?: $this->option('view');
+
+        if (! $view) {
+            $name = str_replace('\\', '/', $this->argument('name'));
+
+            $view = 'mail.'.collect(explode('/', $name))
+                ->map(fn ($part) => Str::kebab($part))
+                ->implode('.');
+        }
+
+        return $view;
     }
 
     /**
@@ -84,9 +141,28 @@ class MailMakeCommand extends GeneratorCommand
      */
     protected function getStub()
     {
-        return $this->option('markdown')
-                        ? __DIR__.'/stubs/markdown-mail.stub'
-                        : __DIR__.'/stubs/mail.stub';
+        if ($this->option('markdown') !== false) {
+            return $this->resolveStubPath('/stubs/markdown-mail.stub');
+        }
+
+        if ($this->option('view') !== false) {
+            return $this->resolveStubPath('/stubs/view-mail.stub');
+        }
+
+        return $this->resolveStubPath('/stubs/mail.stub');
+    }
+
+    /**
+     * Resolve the fully-qualified path to the stub.
+     *
+     * @param  string  $stub
+     * @return string
+     */
+    protected function resolveStubPath($stub)
+    {
+        return file_exists($customPath = $this->laravel->basePath(trim($stub, '/')))
+            ? $customPath
+            : __DIR__.$stub;
     }
 
     /**
@@ -108,9 +184,9 @@ class MailMakeCommand extends GeneratorCommand
     protected function getOptions()
     {
         return [
-            ['force', 'f', InputOption::VALUE_NONE, 'Create the class even if the mailable already exists.'],
-
-            ['markdown', 'm', InputOption::VALUE_OPTIONAL, 'Create a new Markdown template for the mailable.'],
+            ['force', 'f', InputOption::VALUE_NONE, 'Create the class even if the mailable already exists'],
+            ['markdown', 'm', InputOption::VALUE_OPTIONAL, 'Create a new Markdown template for the mailable', false],
+            ['view', null, InputOption::VALUE_OPTIONAL, 'Create a new Blade template for the mailable', false],
         ];
     }
 }
